@@ -1,8 +1,6 @@
 package io.hspx.standaloneReader;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
-import org.apache.commons.math3.util.Pair;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.BasicConfigurator;
@@ -33,7 +31,7 @@ public class Runner {
         for (java.nio.file.Path path : stream) {
             if (!Files.isDirectory(path)) {
                 var out = readParquet(conf, path.toString());
-                writeParquet(conf, out.getFirst(), out.getSecond(), outputDir.toString() + "/" + path.getFileName());
+                writeParquet(conf, out, outputDir + "/" + path.getFileName());
             }
         }
 
@@ -45,7 +43,7 @@ public class Runner {
         }
     }
 
-    public static Pair<Schema, List<GenericData.Record>> readParquet(final Configuration conf, String pathOfFile) throws IOException {
+    public static List<GenericData.Record> readParquet(final Configuration conf, String pathOfFile) throws IOException {
         System.out.println(String.format("Reading %s", pathOfFile));
         ParquetReader<GenericData.Record> reader = null;
         Path path = new Path(pathOfFile);
@@ -55,19 +53,16 @@ public class Runner {
                 .build();
         GenericData.Record record;
         List<GenericData.Record> recordList = new ArrayList<>();
-        Schema schema = null;
-        int count = 0;
         while ((record = reader.read()) != null) {
             recordList.add(record);
-            schema = record.getSchema();
         }
 
         System.out.println("Count: " + recordList.size());
 
-        return new Pair<>(schema, recordList);
+        return recordList;
     }
 
-    public static void writeParquet(final Configuration conf, Schema schema, List<GenericData.Record> recordList, String pathOfFile) throws IOException {
+    public static void writeParquet(final Configuration conf, List<GenericData.Record> recordList, String pathOfFile) throws IOException {
         System.out.println(String.format("Writing file %s with %d records", pathOfFile, recordList.size()));
         Path path = new Path(pathOfFile);
         ParquetWriter<GenericData.Record> writer = null;
@@ -77,7 +72,7 @@ public class Runner {
                     .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
                     .withRowGroupSize(ParquetWriter.DEFAULT_BLOCK_SIZE)
                     .withPageSize(ParquetWriter.DEFAULT_PAGE_SIZE)
-                    .withSchema(schema)
+                    .withSchema(recordList.get(0).getSchema())
                     .withConf(conf)
                     .withCompressionCodec(CompressionCodecName.SNAPPY)
                     .withValidation(false)
