@@ -68,11 +68,9 @@ public class Runner {
     }
 
     public static void writeParquet(final Configuration conf, Schema schema, List<GenericData.Record> recordList, String pathOfFile) throws IOException {
-        // Path to Parquet file in HDFS
         System.out.println(String.format("Writing file %s with %d records", pathOfFile, recordList.size()));
         Path path = new Path(pathOfFile);
         ParquetWriter<GenericData.Record> writer = null;
-        // Creating ParquetWriter using builder
         try {
             writer = AvroParquetWriter.
                     <GenericData.Record>builder(path)
