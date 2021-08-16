@@ -70,8 +70,8 @@ public class Runner {
     }
 
     public static List<GenericData.Record> readParquet(final Configuration conf, String pathOfFile) throws IOException {
-        System.out.println(String.format("Reading %s", pathOfFile));
-        ParquetReader<GenericData.Record> reader = null;
+        System.out.printf("Reading %s%n", pathOfFile);
+        ParquetReader<GenericData.Record> reader;
         Path path = new Path(pathOfFile);
 
         reader = AvroParquetReader
@@ -91,8 +91,8 @@ public class Runner {
         return recordList;
     }
 
-    public static void writeParquet(final Configuration conf, List<GenericData.Record> recordList, String pathOfFile) throws IOException {
-        System.out.println(String.format("Writing file %s with %d records", pathOfFile, recordList.size()));
+    public static void writeParquet(final Configuration conf, List<GenericData.Record> recordList, String pathOfFile) {
+        System.out.printf("Writing file %s with %d records%n", pathOfFile, recordList.size());
         Path path = new Path(pathOfFile);
         ParquetWriter<GenericData.Record> writer = null;
         try {
@@ -158,7 +158,6 @@ public class Runner {
         var epoch = (julianDay - 2440588) * TimeUnit.HOURS.toMillis(24)
                 + nanosOfDay / TimeUnit.MILLISECONDS.toNanos(1);
 
-        LocalDateTime date= Instant.ofEpochMilli(epoch).atZone(ZoneId.of("Etc/UTC")).toLocalDateTime();
-        return date;
+        return Instant.ofEpochMilli(epoch).atZone(ZoneId.of("Etc/UTC")).toLocalDateTime();
     }
 }
