@@ -7,10 +7,13 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.example.data.simple.Int96Value;
+import org.apache.parquet.example.data.simple.NanoTime;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.io.api.Binary;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -20,10 +23,11 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class Runner {
     public static void main(String[] args) throws IOException {
-        BasicConfigurator.configure();
+//        BasicConfigurator.configure();
         Configuration conf = new Configuration();
         conf.setBoolean(org.apache.parquet.avro.AvroReadSupport.READ_INT96_AS_FIXED, true);
 
@@ -53,7 +57,7 @@ public class Runner {
             var value = record.get(field.name());
             if (value != null && value.getClass().getName().equals("org.apache.avro.generic.GenericData$Fixed")) {
                 var x = (GenericData.Fixed) value;
-                value = convertBinaryToDecimal(x, 10, 0);
+                value = getDateTimeValueFromBinary(x);//new Int96Value(Binary.fromConstantByteArray(x.bytes()));//convertBinaryToDecimal(x, 10, 0);
             }
 
             System.out.println(field.name() + " (" + (value != null ? value.getClass().getName() : null) + ")" + " = " + value);
@@ -138,5 +142,16 @@ public class Runner {
         } else {
             return new BigDecimal(new BigInteger(value.bytes()), scale);
         }
+    }
+
+    public static long getDateTimeValueFromBinary(GenericData.Fixed binaryTimeStampValue) {
+        // This method represents binaryTimeStampValue as ByteBuffer, where timestamp is stored as sum of
+        // julian day number (32-bit) and nanos of day (64-bit)
+
+        NanoTime nt = NanoTime.fromBinary(Binary.fromConstantByteArray(binaryTimeStampValue.bytes()));
+        int julianDay = nt.getJulianDay();
+        long nanosOfDay = nt.getTimeOfDayNanos();
+        return (julianDay - 2440588) * TimeUnit.HOURS.toMillis(24)
+                + nanosOfDay / TimeUnit.MILLISECONDS.toNanos(1);
     }
 }
