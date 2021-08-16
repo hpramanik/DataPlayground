@@ -1,5 +1,6 @@
 package io.hspx.standaloneReader;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -12,6 +13,9 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -43,6 +47,19 @@ public class Runner {
         }
     }
 
+    public static void logRecord(GenericData.Record record) {
+        var schema = record.getSchema();
+        for (Schema.Field field : schema.getFields()) {
+            var value = record.get(field.name());
+            if (value != null && value.getClass().getName().equals("org.apache.avro.generic.GenericData$Fixed")) {
+                var x = (GenericData.Fixed) value;
+                value = convertBinaryToDecimal(x, 10, 0);
+            }
+
+            System.out.println(field.name() + " (" + (value != null ? value.getClass().getName() : null) + ")" + " = " + value);
+        }
+    }
+
     public static List<GenericData.Record> readParquet(final Configuration conf, String pathOfFile) throws IOException {
         System.out.println(String.format("Reading %s", pathOfFile));
         ParquetReader<GenericData.Record> reader = null;
@@ -55,6 +72,8 @@ public class Runner {
         List<GenericData.Record> recordList = new ArrayList<>();
         while ((record = reader.read()) != null) {
             recordList.add(record);
+            System.out.println("\n\n========Record=======");
+            logRecord(record);
         }
 
         System.out.println("Count: " + recordList.size());
@@ -93,6 +112,31 @@ public class Runner {
                     e.printStackTrace();
                 }
             }
+        }
+    }
+
+    private static BigDecimal convertBinaryToDecimal(GenericData.Fixed value, int precision, int scale) {
+        // based on parquet-mr pig conversion which is based on spark conversion... yo dawg?
+        if (precision <= 18) {
+            ByteBuffer buffer = ByteBuffer.wrap(value.bytes());
+            byte[] bytes = buffer.array();
+            int start = buffer.arrayOffset() + buffer.position();
+            int end = buffer.arrayOffset() + buffer.limit();
+            long unscaled = 0L;
+            int i = start;
+            while (i < end) {
+                unscaled = (unscaled << 8 | bytes[i] & 0xff);
+                i++;
+            }
+            int bits = 8 * (end - start);
+            long unscaledNew = (unscaled << (64 - bits)) >> (64 - bits);
+            if (unscaledNew <= -Math.pow(10, 18) || unscaledNew >= Math.pow(10, 18)) {
+                return new BigDecimal(unscaledNew);
+            } else {
+                return BigDecimal.valueOf(unscaledNew / Math.pow(10, scale));
+            }
+        } else {
+            return new BigDecimal(new BigInteger(value.bytes()), scale);
         }
     }
 }
