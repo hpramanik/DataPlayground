@@ -158,8 +158,6 @@ public class Runner {
         var epoch = (julianDay - 2440588) * TimeUnit.HOURS.toMillis(24)
                 + nanosOfDay / TimeUnit.MILLISECONDS.toNanos(1);
 
-        System.out.println(epoch);
-
         LocalDateTime date= Instant.ofEpochMilli(epoch).atZone(ZoneId.systemDefault()).toLocalDateTime();
         return date;
     }
