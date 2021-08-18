@@ -7,17 +7,22 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.example.data.simple.NanoTime;
+import org.apache.parquet.format.converter.ParquetMetadataConverter;
+import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.io.api.Binary;
+import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,10 +73,16 @@ public class Runner {
 
     public static List<GenericData.Record> readParquet(final Configuration conf, String pathOfFile) throws IOException {
         System.out.printf("Reading %s%n", pathOfFile);
-        ParquetReader<GenericData.Record> reader;
         Path path = new Path(pathOfFile);
 
-        reader = AvroParquetReader
+        ParquetFileReader schemaReader = new ParquetFileReader(conf, path, ParquetMetadataConverter.NO_FILTER);
+        ParquetMetadata readFooter = schemaReader.getFooter();
+        MessageType schema = readFooter.getFileMetaData().getSchema();
+        schemaReader.close();
+
+        System.out.println(schema);
+
+        ParquetReader<GenericData.Record> reader = AvroParquetReader
                 .<GenericData.Record>builder(path)
                 .withConf(conf)
                 .build();
@@ -79,8 +90,8 @@ public class Runner {
         List<GenericData.Record> recordList = new ArrayList<>();
         while ((record = reader.read()) != null) {
             recordList.add(record);
-            System.out.println("\n\n========Record=======");
-            logRecord(record);
+//            System.out.println("\n\n========Record=======");
+//            logRecord(record);
         }
 
         System.out.println("Count: " + recordList.size());
@@ -122,14 +133,18 @@ public class Runner {
         }
     }
 
-    public static LocalDateTime getDateTimeValueFromBinary(GenericData.Fixed binaryTimeStampValue) {
-        NanoTime nt = NanoTime.fromBinary(Binary.fromConstantByteArray(binaryTimeStampValue.bytes()));
-        int julianDay = nt.getJulianDay();
-        long nanosOfDay = nt.getTimeOfDayNanos();
+    public static Object getDateTimeValueFromBinary(GenericData.Fixed binaryTimeStampValue) {
+        if (binaryTimeStampValue.bytes().length == 12) {
+            NanoTime nt = NanoTime.fromBinary(Binary.fromConstantByteArray(binaryTimeStampValue.bytes()));
+            int julianDay = nt.getJulianDay();
+            long nanosOfDay = nt.getTimeOfDayNanos();
 
-        var epoch = (julianDay - 2440588) * TimeUnit.HOURS.toMillis(24)
-                + nanosOfDay / TimeUnit.MILLISECONDS.toNanos(1);
+            var epoch = (julianDay - 2440588) * TimeUnit.HOURS.toMillis(24)
+                    + nanosOfDay / TimeUnit.MILLISECONDS.toNanos(1);
 
-        return Instant.ofEpochMilli(epoch).atZone(ZoneId.of("Etc/UTC")).toLocalDateTime();
+            return Instant.ofEpochMilli(epoch).atZone(ZoneId.of("Etc/UTC")).toLocalDateTime();
+        }
+
+        return new BigDecimal(new BigInteger(binaryTimeStampValue.bytes()), 18);
     }
 }
